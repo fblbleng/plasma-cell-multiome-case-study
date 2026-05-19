@@ -1,0 +1,5 @@
+"stage","n_cells","median_nFeature","median_nCount","median_pct_mt","median_pct_ribo","median_pct_ig"
+"MBC",1120,617.5,4335,19.94,25.08,0
+"prePB",3119,4230,49821,12.25,14.17,0.04
+"PB",2118,1261,11270.5,25.77,8.68,0.31
+"PC",2188,1121.5,7511,6.02,7.51,1.32
