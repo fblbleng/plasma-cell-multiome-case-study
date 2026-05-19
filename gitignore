@@ -1,0 +1,24 @@
+# Raw data (too large for GitHub, freely downloadable from GEO)
+data/raw/
+data/processed/*.rds
+data/processed/*.h5
+
+# Large outputs
+results/figures/*.pdf
+results/figures/*.png
+!results/figures/.gitkeep
+results/tables/*.csv
+!results/tables/.gitkeep
+
+# R
+.Rhistory
+.RData
+.Rproj.user/
+*.Rproj.bak
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
