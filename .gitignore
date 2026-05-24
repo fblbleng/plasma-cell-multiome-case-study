@@ -1,4 +1,26 @@
+# R session files
 .Rproj.user
 .Rhistory
 .RData
+.RDataTmp*
 .Ruserdata
+
+# macOS junk
+.DS_Store
+**/.DS_Store
+
+# Large data files (regeneratable from scripts)
+data/raw/
+data/annotation/
+data/processed/*.rds
+
+# hdWGCNA artifacts
+TOM/
+ConsensusTOMs/
+
+# Backups from sed find-replace
+*.bak
+*.R.bak
+
+# RStudio project files (keep .Rproj but not the user data)
+.Rproj.user/
