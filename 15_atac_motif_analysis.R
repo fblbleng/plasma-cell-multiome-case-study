@@ -45,6 +45,7 @@ suppressPackageStartupMessages({
   library(tibble)
   library(ggplot2)
   library(patchwork)
+  library(ggrepel)
   library(scales)
 })
 

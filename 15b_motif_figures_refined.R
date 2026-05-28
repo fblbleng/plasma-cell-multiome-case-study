@@ -251,23 +251,25 @@ message("Saved: 39b_motif_volcano_per_transition")
 # ------------------------------------------------------------
 # 4. Summary of transition-specific TFs (table)
 # ------------------------------------------------------------
-specificity_table <- data.frame(
-  motif = rownames(fe_zscored),
-  T1_MBC_to_prePB = fe_zscored[, "T1_MBC_to_prePB"],
-  T2_prePB_to_PB  = fe_zscored[, "T2_prePB_to_PB"],
-  T3_PB_to_PC     = fe_zscored[, "T3_PB_to_PC"],
-  specificity     = motif_specificity,
-  top_transition  = names(transitions)[
-    apply(fe_zscored, 1, which.max)
-  ]
-) |>
+
+# Build the specificity table manually
+fe_zscored_df <- as.data.frame(fe_zscored)
+fe_zscored_df$motif <- rownames(fe_zscored)
+fe_zscored_df$specificity <- motif_specificity[rownames(fe_zscored)]
+fe_zscored_df$top_transition <- names(transitions)[
+  apply(fe_zscored, 1, which.max)
+]
+
+specificity_table <- fe_zscored_df |>
+  dplyr::select(motif, T1_MBC_to_prePB, T2_prePB_to_PB, T3_PB_to_PC,
+                specificity, top_transition) |>
   dplyr::arrange(dplyr::desc(specificity))
 
 write.csv(specificity_table,
-          file.path(tbl_dir, "14b_motif_specificity_ranked.csv"),
+          "results/tables/14b_motif_specificity_ranked.csv",
           row.names = FALSE)
 
-message("\nTop 15 most transition-specific motifs:")
+message("Top 15 most transition-specific motifs:")
 print(head(specificity_table, 15))
 
 message("\n========================================")
