@@ -1,0 +1,228 @@
+<!-- ============================================
+       SECTION 4e, scATAC-seq CHROMATIN INTEGRATION (Phase 3)
+       Insert this block AFTER the hdWGCNA section (4d) and
+       BEFORE the Reproducibility section (Section 5).
+       ============================================ -->
+  <section class="case-section">
+    <p class="section-label" style="font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.18em; color: var(--accent); font-weight: 500;">The chromatin layer</p>
+    <h2>What opens before it is expressed</h2>
+
+    <p>
+      RNA tells us which genes are active. Chromatin tells us which genes are
+      <em>poised</em> to be active, and which regulatory switches the cell has
+      thrown to get there. The same study that generated the RNA data also profiled
+      matched single-cell ATAC-seq (assay for transposase-accessible chromatin),
+      measuring which regions of the genome are open and accessible at each
+      differentiation stage. This phase integrates that chromatin layer with the
+      RNA findings, asking a sharper question: <em>which transcription factors
+      drive each step of the journey from memory B cell to plasma cell?</em>
+    </p>
+
+    <dl class="meta-box">
+      <div><dt>Assay</dt><dd>single-cell ATAC-seq (10x scATAC)</dd></div>
+      <div><dt>Dataset</dt><dd>GSE242324. 10,267 cells across 4 stages, 309,343 unified peaks</dd></div>
+      <div><dt>Reference</dt><dd>hg19, JASPAR2020 vertebrate motifs</dd></div>
+      <div><dt>Tooling</dt><dd>Signac, motifmatchr, RSpectra, visNetwork</dd></div>
+    </dl>
+
+    <h3>A note on the source data</h3>
+
+    <p>
+      Honesty about data quality is part of the work. The fragments files deposited
+      with GSE242324 contain a coordinate corruption: start positions were written
+      in scientific notation (for example, <em>1.44e+08</em> in place of the exact
+      integer), losing the precision needed for fragment-level quality metrics. The
+      analysis was therefore built on the precomputed peak-by-cell count matrices,
+      which preserve correct coordinates. Two consequences follow: TSS enrichment and
+      nucleosome-signal quality metrics were not computed, and coverage track plots
+      were not generated. Cell-level quality control instead used peak count
+      thresholds. The core analyses (clustering, differential accessibility, motif
+      enrichment) depend only on the count matrices and are unaffected. Adapting to
+      imperfect public data is a routine part of computational biology, and
+      documenting the choice is more useful than hiding it.
+    </p>
+
+    <h3>Chromatin alone recovers the developmental stages</h3>
+
+    <p>
+      Before asking about regulation, a sanity check: does the chromatin landscape
+      carry enough information to distinguish the four stages on its own? After
+      TF-IDF normalization and dimensionality reduction by latent semantic indexing,
+      the cells were embedded and clustered using only their accessibility profiles,
+      with no input from the RNA labels.
+    </p>
+
+    <figure class="case-figure">
+      <img src="../images/case-study/32_atac_umap_by_stage.png"
+           alt="scATAC-seq UMAP of 10,267 cells colored by differentiation stage, showing four cleanly separated clusters">
+      <figcaption>
+        <strong>Figure 15.</strong> scATAC-seq UMAP of 10,267 cells across 309,343
+        unified peaks, colored by experimental stage. The four differentiation stages
+        separate cleanly in chromatin space, with prePB forming the most distinctive
+        territory (the stage with the most open chromatin, more than twice the median
+        peaks per cell of any other stage). Chromatin accessibility alone recovers the
+        same biology identified in the RNA analysis.
+      </figcaption>
+    </figure>
+
+    <h3>A single dramatic remodeling step</h3>
+
+    <p>
+      With the stages confirmed, the natural question is what changes between them.
+      Rather than comparing each stage against all others, the differential
+      accessibility analysis followed the trajectory itself: three sequential
+      transitions, each comparing adjacent stages. For every transition, peaks were
+      classified as <em>opening</em> (gaining accessibility moving forward) or
+      <em>closing</em> (losing it).
+    </p>
+
+    <figure class="case-figure">
+      <img src="../images/case-study/36_atac_da_transition_summary.png"
+           alt="Bar chart of peaks opening and closing at each developmental transition, with T1 dramatically larger">
+      <figcaption>
+        <strong>Figure 16.</strong> Significant peaks opening (up) and closing (down)
+        at each developmental transition. The first transition (MBC to prePB) involves
+        23,347 opening and 14,979 closing peaks, three to seventeen times more
+        chromatin remodeling than the later transitions. The chromatin landscape is
+        essentially rewritten at the entry into the differentiation program, then
+        refined rather than rebuilt at each subsequent step.
+      </figcaption>
+    </figure>
+
+    <p>
+      The magnitude reinforces the pattern. Opening peaks at the MBC-to-prePB
+      transition show a median accessibility increase of roughly twenty-fold, while
+      the later transitions proceed largely through selective closing of regulatory
+      elements rather than dramatic opening. This is a coherent biological story:
+      once a memory B cell commits to the plasma cell fate, the regulatory
+      architecture is set early, and commitment proceeds by progressive repression
+      of what is no longer needed.
+    </p>
+
+    <div class="case-key-fact">
+      The chromatin landscape is rewritten once, at the entry into differentiation.
+      The MBC to prePB transition accounts for the overwhelming majority of all
+      accessibility changes; later stages refine the established landscape rather
+      than rebuilding it.
+    </div>
+
+    <h3>Three regulatory axes, written in the motifs</h3>
+
+    <p>
+      Open chromatin is where transcription factors bind. By scanning the DNA
+      sequence underneath each transition's opening peaks for known binding motifs
+      (the JASPAR2020 vertebrate collection of roughly 750 motifs) and testing for
+      enrichment against the genomic background, the analysis identifies which
+      transcription factor families are likely driving each step.
+    </p>
+
+    <p>
+      The raw enrichment is dominated by ubiquitous, GC-rich-binding factors (KLF,
+      SP, EGR, NRF1 families) that appear active in essentially any open chromatin.
+      To surface what is <em>distinctive</em> about each transition rather than what
+      is universally present, the enrichment scores were row-normalized, revealing
+      which factors are relatively more enriched in one transition than the others.
+    </p>
+
+    <figure class="case-figure">
+      <img src="../images/case-study/38b_motif_heatmap_zscored.png"
+           alt="Z-scored heatmap of transition-specific transcription factor motif enrichment across three transitions">
+      <figcaption>
+        <strong>Figure 17.</strong> Transition-specific motif enrichment, row
+        z-scored so that each factor's relative preference across the three
+        transitions is visible. Three regulatory axes emerge: an AP-1 family axis
+        (JUN, FOS, FOSL2, FOSB heterodimers, ATF7, EGR1, CREM) at the MBC-to-prePB
+        transition; a POU2F2 / KLF / XBP1 axis at the prePB-to-PB transition; and an
+        IRF / STAT axis (IRF3, STAT2, plus RELB and the TFAP2 family) at the terminal
+        PB-to-PC transition.
+      </figcaption>
+    </figure>
+
+    <p>
+      Each axis carries textbook biological meaning. The <em>AP-1 family</em>
+      (FOS/JUN heterodimers) is the canonical B-cell activation complex, and its
+      enrichment at the very first transition matches the burst of chromatin opening
+      seen in Figure 16. The <em>POU2F2</em> motif (Oct-2) is one of the most
+      classical plasma cell transcription factors, essential for immunoglobulin
+      expression, and it appears precisely at the specification step where cells
+      commit to the plasmablast fate. The <em>IRF and STAT</em> motifs at terminal
+      differentiation connect directly to the type-I interferon signature identified
+      in the RNA analysis.
+    </p>
+
+    <h3>Where chromatin and RNA tell the same story</h3>
+
+    <p>
+      The reward for building both layers is that they can validate each other. Two
+      regulatory programs are now supported by independent evidence from two
+      molecular modalities. The AP-1 axis is enriched in the chromatin opening at the
+      first transition (this analysis) <em>and</em> the AP-1 factor BATF3 sits as a
+      hub gene in the yellow class-switching co-expression module (Phase 2.2), the
+      same module that contains MIR155HG. The IRF / STAT axis is enriched in the
+      chromatin opening at terminal differentiation <em>and</em> the interferon-response
+      genes it regulates (IFI6, MX1, ISG15, XAF1, IFIT1, IFIT3) are the hub genes of
+      the blue IgG-plasma-cell module.
+    </p>
+
+    <p>
+      The network below assembles this integration into a single view. Each
+      developmental transition is its own constellation: transcription factors
+      (squares, identified from chromatin motif enrichment) on the outer ring, hub
+      genes (circles, identified from RNA co-expression modules) on the inner ring,
+      colored by their module identity. Reading left to right traces the
+      differentiation trajectory.
+    </p>
+
+    <figure class="case-figure">
+      <iframe src="../images/case-study/41_multiomics_network_circular.html"
+              width="100%" height="870" frameborder="0"
+              style="border-radius: 4px; background: white;"
+              title="Interactive multi-omics regulatory network">
+      </iframe>
+      <figcaption>
+        <strong>Figure 18.</strong> Multi-omics regulatory network of plasma cell
+        differentiation, integrating chromatin and RNA evidence. Squares are
+        transcription factors with motifs enriched in transition-opening peaks
+        (chromatin layer); circles are hub genes from hdWGCNA co-expression modules
+        (RNA layer); colors denote module identity. Three regulatory programs are
+        shown side by side: the AP-1 axis driving activation entry (left, yellow), the
+        POU2F2 / KLF / XBP1 axis driving plasmablast specification (centre, brown and
+        turquoise), and the IRF / STAT axis driving terminal differentiation (right,
+        blue). Hover any node for detail; use the dropdown to focus on a single
+        transition. <em>Interactive figure, best viewed on a wider screen.</em>
+      </figcaption>
+    </figure>
+
+    <div class="case-key-fact">
+      The AP-1 family and the IRF / STAT family are each evidenced twice over: once in
+      the chromatin that opens at their transition, and once in the RNA co-expression
+      module they regulate. Two independent molecular layers converge on the same
+      regulatory programs.
+    </div>
+
+    <h3>What the chromatin layer adds, and what comes next</h3>
+
+    <p>
+      The chromatin analysis adds a directional, mechanistic dimension to the RNA
+      findings. Where the RNA modules identified <em>which genes move together</em>,
+      the motif enrichment identifies <em>which transcription factors plausibly drive
+      them</em>, and the differential accessibility shows <em>when</em> in the
+      trajectory the regulatory landscape is established. The integration converts a
+      set of co-expression correlations into testable hypotheses about regulation:
+      that AP-1 factors open the activation program, that POU2F2 and XBP1 specify the
+      secretory plasmablast, and that IRF / STAT activity accompanies terminal
+      differentiation.
+    </p>
+
+    <p>
+      The work is bounded by its data. The ATAC dataset provides one sample per
+      stage, so biological replication at the chromatin level is not available, and
+      the fragment-level corruption described above precludes per-cell motif activity
+      scoring (which would otherwise sharpen the per-cell regulatory inference). The
+      natural next step, planned for the following phase, is TF-target inference with
+      SCENIC on the RNA data, which would formally distinguish regulators from their
+      targets within each module and allow the construction of a directed regulatory
+      network spanning transcription factors, protein-coding targets, and the lncRNA
+      layer together.
+    </p>
+  </section>

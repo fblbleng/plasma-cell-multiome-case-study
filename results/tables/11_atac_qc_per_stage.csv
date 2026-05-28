@@ -1,0 +1,5 @@
+"stage","n_cells","median_peaks","median_counts","iqr_counts_low","iqr_counts_high"
+"MBC",2289,5529,6888,5611,7919
+"prePB",2709,12482,15547,8723,20694
+"PB",2628,7519.5,9425,5799.5,13255.75
+"PC",2641,6485,8081,5958,9602

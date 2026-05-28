@@ -1,0 +1,4 @@
+"transition","peaks_tested","opening","closing","median_log2FC_opening","median_log2FC_closing"
+"T1_MBC_to_prePB",52961,23347,14979,4.36,-2.36
+"T2_prePB_to_PB",41656,7556,8288,0.41,-2.59
+"T3_PB_to_PC",21065,1385,1880,0.7,-1.51

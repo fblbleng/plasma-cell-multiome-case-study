@@ -1,0 +1,415 @@
+# ============================================================
+# 16_atac_rna_multiomics_network.R   (final, consolidated)
+#
+# Phase 3.5: Multi-omics regulatory network integrating ATAC
+# motif enrichment (Phase 3.4) with hdWGCNA modules (Phase 2.2).
+#
+# Output: a single interactive HTML figure showing three
+# circular regulatory constellations (one per developmental
+# transition). Each circle: TFs on outer ring, hub genes on
+# inner ring.
+#
+# Layout:
+#   - T1 circle (left):   AP-1 family axis (yellow module)
+#   - T2 circle (middle): POU2F2/KLF/XBP1 axis
+#                         (brown + turquoise modules)
+#   - T3 circle (right):  IRF/STAT axis (blue module)
+#
+# Visual logic:
+#   - Squares = TFs (chromatin evidence: motif enriched in
+#     transition-opening peaks)
+#   - Circles = hub genes (RNA evidence: top hubs of
+#     hdWGCNA modules)
+#   - Edges color-coded by transition
+#   - Bold headers above each circle
+#
+# Inputs:
+#   - results/tables/14_motif_enrichment_per_transition.csv
+#   - data/processed/seurat_hdWGCNA_modules.rds
+#
+# Outputs:
+#   - results/figures/41_multiomics_network_circular.html
+#   - results/tables/15_tf_target_edges.csv
+# ============================================================
+
+suppressPackageStartupMessages({
+  library(visNetwork)
+  library(dplyr)
+  library(htmlwidgets)
+  library(Seurat)
+  library(hdWGCNA)
+})
+
+if (requireNamespace("conflicted", quietly = TRUE)) {
+  conflicted::conflicts_prefer(dplyr::filter, .quiet = TRUE)
+  conflicted::conflicts_prefer(dplyr::select, .quiet = TRUE)
+  conflicted::conflicts_prefer(dplyr::mutate, .quiet = TRUE)
+}
+
+set.seed(42)
+
+out_dir <- "data/processed"
+fig_dir <- "results/figures"
+tbl_dir <- "results/tables"
+
+# ------------------------------------------------------------
+# 1. Curated TFs per transition (from Phase 3.4 figure 38b)
+# ------------------------------------------------------------
+tfs_t1 <- c("JUN::JUNB", "FOSL2::JUND(var.2)", "FOSL2::JUN(var.2)",
+            "FOSB::JUN", "ATF7", "EGR1", "CREM",
+            "CTCF", "CREB3L4(var.2)", "RFX5", "RFX7")
+
+tfs_t2 <- c("POU2F2", "YY1", "KLF2", "KLF6", "KLF16",
+            "EGR3", "XBP1", "BHLHE40", "CREB3L1",
+            "SP3", "SP8", "RFX1")
+
+tfs_t3 <- c("IRF3", "STAT2", "RELB", "TFAP2A(var.3)",
+            "TFAP2B", "TFAP2C", "NFATC3", "HOXC9",
+            "HOXC10", "Alx4", "PLAG1", "OVOL2")
+
+# ------------------------------------------------------------
+# 2. Load hdWGCNA hub genes
+# ------------------------------------------------------------
+message("Loading hdWGCNA hub genes...")
+hdwgcna_path <- file.path(out_dir, "seurat_hdWGCNA_modules.rds")
+seu_rna <- readRDS(hdwgcna_path)
+hub_genes_table <- GetHubGenes(seu_rna, n_hubs = 10)
+rm(seu_rna); gc()
+
+# Top 8 hubs per module
+hubs_yellow <- hub_genes_table |>
+  dplyr::filter(module == "yellow") |>
+  dplyr::arrange(dplyr::desc(kME)) |>
+  dplyr::slice_head(n = 8) |> dplyr::pull(gene_name)
+
+hubs_brown <- hub_genes_table |>
+  dplyr::filter(module == "brown") |>
+  dplyr::arrange(dplyr::desc(kME)) |>
+  dplyr::slice_head(n = 8) |> dplyr::pull(gene_name)
+
+hubs_turquoise <- hub_genes_table |>
+  dplyr::filter(module == "turquoise") |>
+  dplyr::arrange(dplyr::desc(kME)) |>
+  dplyr::slice_head(n = 8) |> dplyr::pull(gene_name)
+
+hubs_blue <- hub_genes_table |>
+  dplyr::filter(module == "blue") |>
+  dplyr::arrange(dplyr::desc(kME)) |>
+  dplyr::slice_head(n = 8) |> dplyr::pull(gene_name)
+
+message("Hub genes per module:")
+message("  Yellow (T1):    ", paste(hubs_yellow, collapse = ", "))
+message("  Brown (T2):     ", paste(hubs_brown, collapse = ", "))
+message("  Turquoise (T2): ", paste(hubs_turquoise, collapse = ", "))
+message("  Blue (T3):      ", paste(hubs_blue, collapse = ", "))
+
+# ------------------------------------------------------------
+# 3. Build nodes and edges
+# ------------------------------------------------------------
+message("\nBuilding nodes and edges...")
+
+nodes_df <- rbind(
+  data.frame(id = tfs_t1, label = tfs_t1, type = "TF",
+             transition = "T1", module = "yellow",
+             stringsAsFactors = FALSE),
+  data.frame(id = hubs_yellow, label = hubs_yellow, type = "target",
+             transition = "T1", module = "yellow",
+             stringsAsFactors = FALSE),
+  data.frame(id = tfs_t2, label = tfs_t2, type = "TF",
+             transition = "T2", module = "brown",
+             stringsAsFactors = FALSE)
+)
+
+# T2 hub genes: union of brown + turquoise
+hubs_t2 <- unique(c(hubs_brown, hubs_turquoise))
+nodes_df <- rbind(nodes_df, data.frame(
+  id = hubs_t2, label = hubs_t2, type = "target",
+  transition = "T2",
+  module = ifelse(hubs_t2 %in% hubs_brown, "brown", "turquoise"),
+  stringsAsFactors = FALSE
+))
+
+nodes_df <- rbind(nodes_df, data.frame(
+  id = tfs_t3, label = tfs_t3, type = "TF",
+  transition = "T3", module = "blue",
+  stringsAsFactors = FALSE
+))
+nodes_df <- rbind(nodes_df, data.frame(
+  id = hubs_blue, label = hubs_blue, type = "target",
+  transition = "T3", module = "blue",
+  stringsAsFactors = FALSE
+))
+nodes_df <- nodes_df |> dplyr::distinct(id, .keep_all = TRUE)
+
+message("Total nodes: ", nrow(nodes_df))
+print(table(nodes_df$type, nodes_df$transition))
+
+# Edges: TF -> hub gene within each transition
+edges_df <- data.frame(from = character(), to = character(),
+                       transition = character(), stringsAsFactors = FALSE)
+for (t in c("T1", "T2", "T3")) {
+  tfs_t     <- nodes_df$id[nodes_df$transition == t & nodes_df$type == "TF"]
+  targets_t <- nodes_df$id[nodes_df$transition == t & nodes_df$type == "target"]
+  for (tf in tfs_t) {
+    for (target in targets_t) {
+      edges_df <- rbind(edges_df, data.frame(
+        from = tf, to = target, transition = t,
+        stringsAsFactors = FALSE
+      ))
+    }
+  }
+}
+message("Total edges: ", nrow(edges_df))
+write.csv(edges_df, file.path(tbl_dir, "15_tf_target_edges.csv"),
+          row.names = FALSE)
+
+# ------------------------------------------------------------
+# 4. Compute circular coordinates
+# ------------------------------------------------------------
+message("\nComputing circular coordinates...")
+
+R_OUTER <- 360                                    # TFs ring radius
+R_INNER <- 180                                    # Hub genes ring radius
+transition_centers <- c("T1" = -1100,
+                        "T2" =  0,
+                        "T3" =  1100)
+
+circular_layout <- function(df, transition_name) {
+  df_t <- df[df$transition == transition_name, ]
+  cx <- transition_centers[transition_name]
+  
+  tfs  <- df_t[df_t$type == "TF", ]
+  hubs <- df_t[df_t$type == "target", ]
+  
+  # TFs on outer ring (start at top, go clockwise)
+  n_tfs <- nrow(tfs)
+  tf_angles <- seq(0, 2 * pi, length.out = n_tfs + 1)[-1]
+  tf_angles <- -tf_angles + pi / 2
+  tfs$x <- cx + R_OUTER * cos(tf_angles)
+  tfs$y <- R_OUTER * sin(tf_angles)
+  
+  # Hub genes on inner ring (offset half-step for visual interleave)
+  n_hubs <- nrow(hubs)
+  hub_angles <- seq(0, 2 * pi, length.out = n_hubs + 1)[-1]
+  hub_angles <- -hub_angles + pi / 2 + pi / n_hubs
+  hubs$x <- cx + R_INNER * cos(hub_angles)
+  hubs$y <- R_INNER * sin(hub_angles)
+  
+  rbind(tfs, hubs)
+}
+
+positioned_nodes <- rbind(
+  circular_layout(nodes_df, "T1"),
+  circular_layout(nodes_df, "T2"),
+  circular_layout(nodes_df, "T3")
+)
+# visNetwork's Y axis is inverted (down = positive); flip
+positioned_nodes$y <- -positioned_nodes$y
+
+# ------------------------------------------------------------
+# 5. Color palette
+# ------------------------------------------------------------
+module_colors <- c(
+  "yellow"    = "#e8b800",
+  "brown"     = "#964b00",
+  "turquoise" = "#4cb5b0",
+  "blue"      = "#4472c4"
+)
+
+transition_colors <- c(
+  "T1" = "#d4a52f",
+  "T2" = "#a06030",
+  "T3" = "#6677aa"
+)
+
+transition_labels <- c(
+  "T1" = "T1: MBC to prePB (AP-1 axis)",
+  "T2" = "T2: prePB to PB (POU/KLF/XBP1 axis)",
+  "T3" = "T3: PB to PC (IRF/STAT axis)"
+)
+
+# ------------------------------------------------------------
+# 6. Build visNetwork nodes
+# ------------------------------------------------------------
+vis_nodes <- positioned_nodes |>
+  dplyr::mutate(
+    label = label,
+    shape = ifelse(type == "TF", "square", "dot"),
+    color.background = module_colors[module],
+    color.border = "#2a2622",
+    color.highlight.background = module_colors[module],
+    color.highlight.border = "#b15835",
+    size = ifelse(type == "TF", 28, 22),
+    borderWidth = 1.8,
+    borderWidthSelected = 4,
+    font.size = 14,
+    font.color = "#2a2622",
+    font.face = "Helvetica",
+    font.strokeWidth = 3,
+    font.strokeColor = "#faf7f2",
+    title = paste0(
+      "<b>", label, "</b><br>",
+      "Type: ", ifelse(type == "TF",
+                       "Transcription factor (motif evidence)",
+                       "Hub gene (RNA module evidence)"), "<br>",
+      "Module: ", module, "<br>",
+      "Transition: ", transition_labels[transition]
+    ),
+    group = ifelse(type == "TF", "Transcription factor", "Hub gene"),
+    physics = FALSE
+  )
+
+# Header nodes (invisible markers carrying bold transition titles)
+header_nodes <- data.frame(
+  id = c("HEADER_T1", "HEADER_T2", "HEADER_T3"),
+  label = c("T1: MBC \u2192 prePB\nAP-1 family axis",
+            "T2: prePB \u2192 PB\nPOU2F2 / KLF / XBP1 axis",
+            "T3: PB \u2192 PC\nIRF / STAT axis"),
+  type = "header",
+  transition = c("T1", "T2", "T3"),   # carry transition for filter
+  module = NA_character_,
+  shape = "text",
+  group = NA_character_,
+  color.background = "transparent",
+  color.border = "transparent",
+  color.highlight.background = "transparent",
+  color.highlight.border = "transparent",
+  borderWidth = 0,
+  borderWidthSelected = 0,
+  size = 0,
+  font.size = 22,
+  font.color = "#2a2622",
+  font.face = "Helvetica",
+  font.strokeWidth = 0,
+  font.strokeColor = "transparent",
+  title = c("T1: MBC to prePB", "T2: prePB to PB", "T3: PB to PC"),
+  x = c(transition_centers["T1"],
+        transition_centers["T2"],
+        transition_centers["T3"]),
+  y = -(R_OUTER + 110),
+  physics = FALSE,
+  stringsAsFactors = FALSE
+)
+
+# Use union of columns to keep transition (for filter dropdown)
+common_cols <- union(
+  intersect(names(vis_nodes), names(header_nodes)),
+  "transition"
+)
+# Ensure both data frames have the union of columns, filling NA where missing
+for (col in common_cols) {
+  if (!col %in% names(vis_nodes))    vis_nodes[[col]]    <- NA
+  if (!col %in% names(header_nodes)) header_nodes[[col]] <- NA
+}
+vis_nodes_final <- rbind(
+  vis_nodes[, common_cols],
+  header_nodes[, common_cols]
+)
+
+# ------------------------------------------------------------
+# 7. Build visNetwork edges (sampled for visual clarity)
+# ------------------------------------------------------------
+vis_edges <- edges_df |>
+  dplyr::group_by(transition) |>
+  dplyr::slice_sample(n = 40) |>
+  dplyr::ungroup() |>
+  dplyr::mutate(
+    color = transition_colors[transition],
+    width = 1,
+    arrows = "to",
+    title = transition_labels[transition]
+  )
+
+# ------------------------------------------------------------
+# 8. Render the network
+# ------------------------------------------------------------
+message("\nRendering circular network...")
+
+net <- visNetwork(
+  vis_nodes_final,
+  vis_edges,
+  width = "100%",
+  height = "850px",
+  main = list(
+    text = "Multi-omics regulatory network of plasma cell differentiation",
+    style = "font-family: Helvetica; font-size: 22px; color: #2a2622; font-weight: 500; padding: 10px;"
+  ),
+  submain = list(
+    text = "Three regulatory programs identified by chromatin (TFs, squares) and RNA co-expression (hub genes, circles). Hover any node for details.",
+    style = "font-family: Helvetica; font-size: 13px; color: #5c544b; padding: 5px;"
+  )
+) |>
+  visEdges(
+    smooth = list(enabled = TRUE, type = "curvedCW", roundness = 0.20),
+    arrows = list(to = list(enabled = TRUE, scaleFactor = 0.4)),
+    color = list(opacity = 0.45),
+    width = 1
+  ) |>
+  visPhysics(enabled = FALSE) |>
+  visInteraction(
+    hover = TRUE,
+    tooltipDelay = 100,
+    zoomView = TRUE,
+    dragView = TRUE,
+    navigationButtons = TRUE,
+    keyboard = TRUE
+  ) |>
+  visOptions(
+    highlightNearest = list(
+      enabled = TRUE,
+      degree = 1,
+      hover = TRUE,
+      labelOnly = FALSE
+    ),
+    selectedBy = list(
+      variable = "transition",
+      multiple = FALSE,
+      main = "Filter by transition",
+      values = c("T1", "T2", "T3")
+    )
+  ) |>
+  visLegend(
+    useGroups = FALSE,
+    position = "right",
+    width = 0.16,
+    addEdges = data.frame(
+      label = c("T1: MBC -> prePB",
+                "T2: prePB -> PB",
+                "T3: PB -> PC"),
+      color = c("#d4a52f", "#a06030", "#6677aa"),
+      arrows = "to"
+    ),
+    addNodes = data.frame(
+      label = c("TF (square)",
+                "Hub gene (circle)",
+                "Yellow module",
+                "Brown module",
+                "Turquoise module",
+                "Blue module"),
+      shape = c("square", "dot", "dot", "dot", "dot", "dot"),
+      color = c("#999999", "#999999",
+                "#e8b800", "#964b00", "#4cb5b0", "#4472c4")
+    )
+  )
+
+# ------------------------------------------------------------
+# 9. Save
+# ------------------------------------------------------------
+html_path <- file.path(fig_dir, "41_multiomics_network_circular.html")
+visSave(net, file = html_path, selfcontained = TRUE)
+
+message("\n========================================")
+message("Phase 3.5 complete!")
+message("\nFigure saved: ", html_path)
+message("Table saved:  ", file.path(tbl_dir, "15_tf_target_edges.csv"))
+message("\nNetwork structure:")
+message("  T1 circle (left):   ", length(tfs_t1), " TFs, ",
+        length(hubs_yellow), " hub genes (yellow module)")
+message("  T2 circle (middle): ", length(tfs_t2), " TFs, ",
+        length(hubs_t2), " hub genes (brown + turquoise modules)")
+message("  T3 circle (right):  ", length(tfs_t3), " TFs, ",
+        length(hubs_blue), " hub genes (blue module)")
+message("\nTo embed in case study HTML:")
+message("  <iframe src='figures/41_multiomics_network_circular.html'")
+message("          width='100%' height='870' frameborder='0'></iframe>")
+message("========================================")

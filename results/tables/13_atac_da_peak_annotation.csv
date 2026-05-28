@@ -1,0 +1,7 @@
+"transition","direction","promoter","gene_body","intergenic","total"
+"T1_MBC_to_prePB","opening",2224,14126,6997,23347
+"T1_MBC_to_prePB","closing",1461,9014,4504,14979
+"T2_prePB_to_PB","opening",786,4531,2239,7556
+"T2_prePB_to_PB","closing",693,5043,2552,8288
+"T3_PB_to_PC","opening",141,832,412,1385
+"T3_PB_to_PC","closing",206,1133,541,1880
